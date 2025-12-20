@@ -98,7 +98,7 @@ ENV NEXT_PRIVATE_TELEMETRY_KEY="$NEXT_PRIVATE_TELEMETRY_KEY"
 ARG NEXT_PRIVATE_TELEMETRY_HOST=""
 ENV NEXT_PRIVATE_TELEMETRY_HOST="$NEXT_PRIVATE_TELEMETRY_HOST"
 
-# Instalar Chromium y dependencias para Playwright
+# Dependencias del sistema para Playwright/Chromium
 RUN apk add --no-cache \
     chromium \
     nss \
@@ -106,17 +106,22 @@ RUN apk add --no-cache \
     harfbuzz \
     ca-certificates \
     ttf-freefont \
-    font-noto-emoji
+    font-noto-emoji \
+    libc6-compat \
+    gcompat
 
-# Configurar Playwright para usar Chromium del sistema
-ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
-ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
-ENV CHROME_BIN=/usr/bin/chromium-browser
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
-
-# Don't run production as root
+# Crear usuario nodejs primero
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nodejs
+
+# Crear directorio de caché de Playwright para el usuario nodejs
+RUN mkdir -p /home/nodejs/.cache/ms-playwright && \
+    chown -R nodejs:nodejs /home/nodejs/.cache
+
+# Instalar Playwright browsers como root pero en el directorio del usuario
+ENV PLAYWRIGHT_BROWSERS_PATH=/home/nodejs/.cache/ms-playwright
+RUN npx playwright install chromium || true
+RUN chown -R nodejs:nodejs /home/nodejs/.cache
 
 USER nodejs
 
@@ -141,7 +146,6 @@ COPY --from=installer --chown=nodejs:nodejs /app/packages/prisma/migrations ./pa
 
 # Generate the prisma client again
 RUN npx prisma generate --schema ./packages/prisma/schema.prisma
-
 
 # Get the start script from docker/
 COPY --chown=nodejs:nodejs ./docker/start.sh /app/apps/remix/start.sh
