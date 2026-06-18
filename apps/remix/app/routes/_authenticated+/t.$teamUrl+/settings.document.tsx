@@ -1,11 +1,11 @@
-import { useLingui } from '@lingui/react/macro';
-import { Loader } from 'lucide-react';
-import { useLoaderData } from 'react-router';
-
 import { IS_AI_FEATURES_CONFIGURED } from '@documenso/lib/constants/app';
 import { DocumentSignatureType } from '@documenso/lib/constants/document';
 import { trpc } from '@documenso/trpc/react';
 import { useToast } from '@documenso/ui/primitives/use-toast';
+import { msg } from '@lingui/core/macro';
+import { useLingui } from '@lingui/react/macro';
+import { Loader } from 'lucide-react';
+import { useLoaderData } from 'react-router';
 
 import {
   DocumentPreferencesForm,
@@ -16,7 +16,7 @@ import { useCurrentTeam } from '~/providers/team';
 import { appMetaTags } from '~/utils/meta';
 
 export function meta() {
-  return appMetaTags('Document Preferences');
+  return appMetaTags(msg`Document Preferences`);
 }
 
 export const loader = () => {
@@ -50,7 +50,11 @@ export default function TeamsSettingsPage() {
         includeSigningCertificate,
         includeAuditLog,
         signatureTypes,
+        defaultRecipients,
+        delegateDocumentOwnership,
         aiFeaturesEnabled,
+        envelopeExpirationPeriod,
+        reminderSettings,
       } = data;
 
       await updateTeamSettings({
@@ -63,7 +67,10 @@ export default function TeamsSettingsPage() {
           includeSenderDetails,
           includeSigningCertificate,
           includeAuditLog,
+          defaultRecipients,
           aiFeaturesEnabled,
+          envelopeExpirationPeriod,
+          reminderSettings,
           ...(signatureTypes.length === 0
             ? {
                 typedSignatureEnabled: null,
@@ -75,6 +82,7 @@ export default function TeamsSettingsPage() {
                 uploadSignatureEnabled: signatureTypes.includes(DocumentSignatureType.UPLOAD),
                 drawSignatureEnabled: signatureTypes.includes(DocumentSignatureType.DRAW),
               }),
+          delegateDocumentOwnership: delegateDocumentOwnership,
         },
       });
 

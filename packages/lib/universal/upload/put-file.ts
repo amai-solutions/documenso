@@ -1,12 +1,8 @@
+import { env } from '@documenso/lib/utils/env';
+import type { TGetPresignedPostUrlResponse, TUploadPdfResponse } from '@documenso/remix/server/api/files/files.types';
 import { DocumentDataType } from '@prisma/client';
 import { base64 } from '@scure/base';
 import { match } from 'ts-pattern';
-
-import { env } from '@documenso/lib/utils/env';
-import type {
-  TGetPresignedPostUrlResponse,
-  TUploadPdfResponse,
-} from '@documenso/remix/server/api/files/files.types';
 
 import { NEXT_PUBLIC_WEBAPP_URL } from '../../constants/app';
 import { AppError } from '../../errors/app-error';
@@ -17,7 +13,27 @@ type File = {
   arrayBuffer: () => Promise<ArrayBuffer>;
 };
 
-export const putPdfFile = async (file: File) => {
+/**
+ * Options for uploads that are not authorized by a logged-in session.
+ *
+ * Embedded authoring flows run cross-origin without a session cookie, so they
+ * must authorize uploads with their embedding presign token instead.
+ */
+export type PutFileOptions = {
+  presignToken?: string;
+};
+
+const buildUploadAuthHeaders = (options?: PutFileOptions): Record<string, string> => {
+  if (!options?.presignToken) {
+    return {};
+  }
+
+  return {
+    Authorization: `Bearer ${options.presignToken}`,
+  };
+};
+
+export const putPdfFile = async (file: File, options?: PutFileOptions) => {
   const formData = new FormData();
 
   // Create a proper File object from the data
@@ -29,6 +45,7 @@ export const putPdfFile = async (file: File) => {
 
   const response = await fetch('/api/files/upload-pdf', {
     method: 'POST',
+    headers: buildUploadAuthHeaders(options),
     body: formData,
   });
 
@@ -45,11 +62,12 @@ export const putPdfFile = async (file: File) => {
 /**
  * Uploads a file to the appropriate storage location.
  */
-export const putFile = async (file: File) => {
+export const putFile = async (file: File, options?: PutFileOptions) => {
   const NEXT_PUBLIC_UPLOAD_TRANSPORT = env('NEXT_PUBLIC_UPLOAD_TRANSPORT');
 
   return await match(NEXT_PUBLIC_UPLOAD_TRANSPORT)
-    .with('s3', async () => putFileInS3(file))
+    .with('s3', async () => putFileInObjectStorage(file, {}, options))
+    .with('azure-blob', async () => putFileInObjectStorage(file, { 'x-ms-blob-type': 'BlockBlob' }, options))
     .otherwise(async () => putFileInDatabase(file));
 };
 
@@ -66,43 +84,38 @@ const putFileInDatabase = async (file: File) => {
   };
 };
 
-const putFileInS3 = async (file: File) => {
-  const getPresignedUrlResponse = await fetch(
-    `${NEXT_PUBLIC_WEBAPP_URL()}/api/files/presigned-post-url`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        fileName: file.name,
-        contentType: file.type,
-      }),
+const putFileInObjectStorage = async (file: File, extraHeaders: Record<string, string>, options?: PutFileOptions) => {
+  const getPresignedUrlResponse = await fetch(`${NEXT_PUBLIC_WEBAPP_URL()}/api/files/presigned-post-url`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...buildUploadAuthHeaders(options),
     },
-  );
+    body: JSON.stringify({
+      fileName: file.name,
+      contentType: file.type,
+    }),
+  });
 
   if (!getPresignedUrlResponse.ok) {
-    throw new Error(
-      `Failed to get presigned post url, failed with status code ${getPresignedUrlResponse.status}`,
-    );
+    throw new Error(`Failed to get presigned post url, failed with status code ${getPresignedUrlResponse.status}`);
   }
 
   const { url, key }: TGetPresignedPostUrlResponse = await getPresignedUrlResponse.json();
 
   const body = await file.arrayBuffer();
 
-  const reponse = await fetch(url, {
+  const response = await fetch(url, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/octet-stream',
+      ...extraHeaders,
     },
     body,
   });
 
-  if (!reponse.ok) {
-    throw new Error(
-      `Failed to upload file "${file.name}", failed with status code ${reponse.status}`,
-    );
+  if (!response.ok) {
+    throw new Error(`Failed to upload file "${file.name}", failed with status code ${response.status}`);
   }
 
   return {

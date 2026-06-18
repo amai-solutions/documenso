@@ -1,13 +1,12 @@
-import { PDFDocument } from '@cantoo/pdf-lib';
-import { expect, test } from '@playwright/test';
-import { DocumentStatus, FieldType } from '@prisma/client';
-
 import { getDocumentByToken } from '@documenso/lib/server-only/document/get-document-by-token';
 import { getEnvelopeItemPdfUrl } from '@documenso/lib/utils/envelope-download';
 import { prisma } from '@documenso/prisma';
 import { seedPendingDocumentWithFullFields } from '@documenso/prisma/seed/documents';
 import { seedTeam } from '@documenso/prisma/seed/teams';
 import { seedUser } from '@documenso/prisma/seed/users';
+import { PDF } from '@libpdf/core';
+import { expect, test } from '@playwright/test';
+import { DocumentStatus, FieldType } from '@prisma/client';
 
 import { apiSignin } from '../fixtures/authentication';
 import { signSignaturePad } from '../fixtures/signature';
@@ -43,7 +42,7 @@ test.describe('Signing Certificate Tests', () => {
         return fetch(documentUrl).then(async (res) => await res.arrayBuffer());
       });
 
-    const originalPdf = await PDFDocument.load(documentData);
+    const originalPdf = await PDF.load(new Uint8Array(documentData));
 
     // Sign the document
     await page.goto(`/sign/${recipient.token}`);
@@ -101,14 +100,12 @@ test.describe('Signing Certificate Tests', () => {
     const completedDocumentData = new Uint8Array(pdfData);
 
     // Load the PDF and check number of pages
-    const pdfDoc = await PDFDocument.load(completedDocumentData);
+    const pdfDoc = await PDF.load(new Uint8Array(completedDocumentData));
 
     expect(pdfDoc.getPageCount()).toBe(originalPdf.getPageCount() + 1); // Original + Certificate
   });
 
-  test('team document with signing certificate enabled should include certificate', async ({
-    page,
-  }) => {
+  test('team document with signing certificate enabled should include certificate', async ({ page }) => {
     const { owner, team } = await seedTeam();
 
     const { document, recipients } = await seedPendingDocumentWithFullFields({
@@ -153,7 +150,7 @@ test.describe('Signing Certificate Tests', () => {
         return fetch(documentUrl).then(async (res) => await res.arrayBuffer());
       });
 
-    const originalPdf = await PDFDocument.load(documentData);
+    const originalPdf = await PDF.load(new Uint8Array(documentData));
 
     // Sign the document
     await page.goto(`/sign/${recipient.token}`);
@@ -206,14 +203,12 @@ test.describe('Signing Certificate Tests', () => {
     const completedDocumentData = new Uint8Array(pdfData);
 
     // Load the PDF and check number of pages
-    const completedPdf = await PDFDocument.load(completedDocumentData);
+    const completedPdf = await PDF.load(new Uint8Array(completedDocumentData));
 
     expect(completedPdf.getPageCount()).toBe(originalPdf.getPageCount() + 1); // Original + Certificate
   });
 
-  test('team document with signing certificate disabled should not include certificate', async ({
-    page,
-  }) => {
+  test('team document with signing certificate disabled should not include certificate', async ({ page }) => {
     const { owner, team } = await seedTeam();
 
     const { document, recipients } = await seedPendingDocumentWithFullFields({
@@ -258,7 +253,7 @@ test.describe('Signing Certificate Tests', () => {
         return fetch(documentUrl).then(async (res) => await res.arrayBuffer());
       });
 
-    const originalPdf = await PDFDocument.load(new Uint8Array(documentData));
+    const originalPdf = await PDF.load(new Uint8Array(documentData));
 
     // Sign the document
     await page.goto(`/sign/${recipient.token}`);
@@ -304,12 +299,10 @@ test.describe('Signing Certificate Tests', () => {
       version: 'signed',
     });
 
-    const completedDocumentData = await fetch(documentUrl).then(
-      async (res) => await res.arrayBuffer(),
-    );
+    const completedDocumentData = await fetch(documentUrl).then(async (res) => await res.arrayBuffer());
 
     // Load the PDF and check number of pages
-    const completedPdf = await PDFDocument.load(completedDocumentData);
+    const completedPdf = await PDF.load(new Uint8Array(completedDocumentData));
 
     expect(completedPdf.getPageCount()).toBe(originalPdf.getPageCount());
   });

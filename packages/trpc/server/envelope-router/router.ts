@@ -3,6 +3,10 @@ import { createAttachmentRoute } from './attachment/create-attachment';
 import { deleteAttachmentRoute } from './attachment/delete-attachment';
 import { findAttachmentsRoute } from './attachment/find-attachments';
 import { updateAttachmentRoute } from './attachment/update-attachment';
+import { bulkCancelEnvelopesRoute } from './bulk-cancel-envelopes';
+import { bulkDeleteEnvelopesRoute } from './bulk-delete-envelopes';
+import { bulkMoveEnvelopesRoute } from './bulk-move-envelopes';
+import { cancelEnvelopeRoute } from './cancel-envelope';
 import { createEnvelopeRoute } from './create-envelope';
 import { createEnvelopeItemsRoute } from './create-envelope-items';
 import { deleteEnvelopeRoute } from './delete-envelope';
@@ -13,16 +17,23 @@ import { duplicateEnvelopeRoute } from './duplicate-envelope';
 import { createEnvelopeFieldsRoute } from './envelope-fields/create-envelope-fields';
 import { deleteEnvelopeFieldRoute } from './envelope-fields/delete-envelope-field';
 import { getEnvelopeFieldRoute } from './envelope-fields/get-envelope-field';
+import { getEnvelopeFieldSignaturesRoute } from './envelope-fields/get-envelope-field-signatures';
 import { updateEnvelopeFieldsRoute } from './envelope-fields/update-envelope-fields';
 import { createEnvelopeRecipientsRoute } from './envelope-recipients/create-envelope-recipients';
 import { deleteEnvelopeRecipientRoute } from './envelope-recipients/delete-envelope-recipient';
 import { getEnvelopeRecipientRoute } from './envelope-recipients/get-envelope-recipient';
+import { reportRecipientRoute } from './envelope-recipients/report-recipient';
 import { updateEnvelopeRecipientsRoute } from './envelope-recipients/update-envelope-recipients';
 import { findEnvelopeAuditLogsRoute } from './find-envelope-audit-logs';
+import { findEnvelopesRoute } from './find-envelopes';
+import { getEditorEnvelopeRoute } from './get-editor-envelope';
 import { getEnvelopeRoute } from './get-envelope';
 import { getEnvelopeItemsRoute } from './get-envelope-items';
 import { getEnvelopeItemsByTokenRoute } from './get-envelope-items-by-token';
+import { getEnvelopesByIdsRoute } from './get-envelopes-by-ids';
 import { redistributeEnvelopeRoute } from './redistribute-envelope';
+import { replaceEnvelopeItemPdfRoute } from './replace-envelope-item-pdf';
+import { saveAsTemplateRoute } from './save-as-template';
 import { setEnvelopeFieldsRoute } from './set-envelope-fields';
 import { setEnvelopeRecipientsRoute } from './set-envelope-recipients';
 import { signEnvelopeFieldRoute } from './sign-envelope-field';
@@ -50,6 +61,7 @@ export const envelopeRouter = router({
     updateMany: updateEnvelopeItemsRoute,
     delete: deleteEnvelopeItemRoute,
     download: downloadEnvelopeItemRoute,
+    replacePdf: replaceEnvelopeItemPdfRoute,
   },
   recipient: {
     get: getEnvelopeRecipientRoute,
@@ -57,24 +69,38 @@ export const envelopeRouter = router({
     updateMany: updateEnvelopeRecipientsRoute,
     delete: deleteEnvelopeRecipientRoute,
     set: setEnvelopeRecipientsRoute,
+    report: reportRecipientRoute,
   },
   field: {
     get: getEnvelopeFieldRoute,
+    getSignatures: getEnvelopeFieldSignaturesRoute,
     createMany: createEnvelopeFieldsRoute,
     updateMany: updateEnvelopeFieldsRoute,
     delete: deleteEnvelopeFieldRoute,
     set: setEnvelopeFieldsRoute,
     sign: signEnvelopeFieldRoute,
   },
+  find: findEnvelopesRoute,
   auditLog: {
     find: findEnvelopeAuditLogsRoute,
   },
+  bulk: {
+    move: bulkMoveEnvelopesRoute,
+    delete: bulkDeleteEnvelopesRoute,
+    cancel: bulkCancelEnvelopesRoute,
+  },
+  editor: {
+    get: getEditorEnvelopeRoute,
+  },
   get: getEnvelopeRoute,
+  getMany: getEnvelopesByIdsRoute,
   create: createEnvelopeRoute,
   use: useEnvelopeRoute,
   update: updateEnvelopeRoute,
   delete: deleteEnvelopeRoute,
+  cancel: cancelEnvelopeRoute,
   duplicate: duplicateEnvelopeRoute,
+  saveAsTemplate: saveAsTemplateRoute,
   distribute: distributeEnvelopeRoute,
   redistribute: redistributeEnvelopeRoute,
   signingStatus: signingStatusEnvelopeRoute,

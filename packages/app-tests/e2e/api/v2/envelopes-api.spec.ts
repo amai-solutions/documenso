@@ -1,9 +1,5 @@
-import { expect, test } from '@playwright/test';
-import type { Team, User } from '@prisma/client';
 import fs from 'node:fs';
 import path from 'node:path';
-import { pick } from 'remeda';
-
 import { NEXT_PUBLIC_WEBAPP_URL } from '@documenso/lib/constants/app';
 import { createApiToken } from '@documenso/lib/server-only/public-api/create-api-token';
 import { DocumentAccessAuth } from '@documenso/lib/types/document-auth';
@@ -19,16 +15,20 @@ import {
   RecipientRole,
 } from '@documenso/prisma/client';
 import { seedUser } from '@documenso/prisma/seed/users';
-import type { TCreateEnvelopeItemsPayload } from '@documenso/trpc/server/envelope-router/create-envelope-items.types';
 import type {
   TCreateEnvelopePayload,
   TCreateEnvelopeResponse,
 } from '@documenso/trpc/server/envelope-router/create-envelope.types';
+import type { TCreateEnvelopeItemsPayload } from '@documenso/trpc/server/envelope-router/create-envelope-items.types';
 import type { TDistributeEnvelopeRequest } from '@documenso/trpc/server/envelope-router/distribute-envelope.types';
 import type { TCreateEnvelopeRecipientsRequest } from '@documenso/trpc/server/envelope-router/envelope-recipients/create-envelope-recipients.types';
 import type { TUpdateEnvelopeRecipientsRequest } from '@documenso/trpc/server/envelope-router/envelope-recipients/update-envelope-recipients.types';
+import type { TFindEnvelopesResponse } from '@documenso/trpc/server/envelope-router/find-envelopes.types';
 import type { TGetEnvelopeResponse } from '@documenso/trpc/server/envelope-router/get-envelope.types';
 import type { TUpdateEnvelopeRequest } from '@documenso/trpc/server/envelope-router/update-envelope.types';
+import { type APIRequestContext, expect, test } from '@playwright/test';
+import type { Team, User } from '@prisma/client';
+import { pick } from 'remeda';
 
 import { ALIGNMENT_TEST_FIELDS } from '../../../constants/field-alignment-pdf';
 import { FIELD_META_TEST_FIELDS } from '../../../constants/field-meta-pdf';
@@ -93,9 +93,7 @@ test.describe('API V2 Envelopes', () => {
       const files = [
         {
           name: 'field-font-alignment.pdf',
-          data: fs.readFileSync(
-            path.join(__dirname, '../../../../../assets/field-font-alignment.pdf'),
-          ),
+          data: fs.readFileSync(path.join(__dirname, '../../../../../assets/field-font-alignment.pdf')),
         },
       ];
 
@@ -170,6 +168,7 @@ test.describe('API V2 Envelopes', () => {
                 positionY: 0,
                 width: 0,
                 height: 0,
+                fieldMeta: { type: 'signature' },
               },
               {
                 type: FieldType.SIGNATURE,
@@ -179,6 +178,7 @@ test.describe('API V2 Envelopes', () => {
                 positionY: 0,
                 width: 0,
                 height: 0,
+                fieldMeta: { type: 'signature' },
               },
             ],
           },
@@ -204,7 +204,9 @@ test.describe('API V2 Envelopes', () => {
             documentPending: false,
             documentCompleted: false,
             documentDeleted: false,
+            ownerRecipientExpired: true,
             ownerDocumentCompleted: true,
+            ownerDocumentCreated: true,
           },
         },
         attachments: [
@@ -227,9 +229,7 @@ test.describe('API V2 Envelopes', () => {
         },
         {
           name: 'field-font-alignment.pdf',
-          data: fs.readFileSync(
-            path.join(__dirname, '../../../../../assets/field-font-alignment.pdf'),
-          ),
+          data: fs.readFileSync(path.join(__dirname, '../../../../../assets/field-font-alignment.pdf')),
         },
       ];
 
@@ -289,15 +289,11 @@ test.describe('API V2 Envelopes', () => {
       expect(envelope.documentMeta.dateFormat).toBe(payload.meta.dateFormat);
       expect(envelope.documentMeta.distributionMethod).toBe(payload.meta.distributionMethod);
       expect(envelope.documentMeta.signingOrder).toBe(payload.meta.signingOrder);
-      expect(envelope.documentMeta.allowDictateNextSigner).toBe(
-        payload.meta.allowDictateNextSigner,
-      );
+      expect(envelope.documentMeta.allowDictateNextSigner).toBe(payload.meta.allowDictateNextSigner);
       expect(envelope.documentMeta.redirectUrl).toBe(payload.meta.redirectUrl);
       expect(envelope.documentMeta.language).toBe(payload.meta.language);
       expect(envelope.documentMeta.typedSignatureEnabled).toBe(payload.meta.typedSignatureEnabled);
-      expect(envelope.documentMeta.uploadSignatureEnabled).toBe(
-        payload.meta.uploadSignatureEnabled,
-      );
+      expect(envelope.documentMeta.uploadSignatureEnabled).toBe(payload.meta.uploadSignatureEnabled);
       expect(envelope.documentMeta.drawSignatureEnabled).toBe(payload.meta.drawSignatureEnabled);
       expect(envelope.documentMeta.emailReplyTo).toBe(payload.meta.emailReplyTo);
       expect(envelope.documentMeta.emailSettings).toEqual(payload.meta.emailSettings);
@@ -319,9 +315,7 @@ test.describe('API V2 Envelopes', () => {
         role: recipient.role,
         signingOrder: recipient.signingOrder,
         accessAuth: recipient.authOptions?.accessAuth,
-      }).toEqual(
-        pick(payload.recipients[0], ['email', 'name', 'role', 'signingOrder', 'accessAuth']),
-      );
+      }).toEqual(pick(payload.recipients[0], ['email', 'name', 'role', 'signingOrder', 'accessAuth']));
 
       expect({
         type: field.type,
@@ -330,16 +324,7 @@ test.describe('API V2 Envelopes', () => {
         positionY: field.positionY.toNumber(),
         width: field.width.toNumber(),
         height: field.height.toNumber(),
-      }).toEqual(
-        pick(payload.recipients[0].fields[0], [
-          'type',
-          'page',
-          'positionX',
-          'positionY',
-          'width',
-          'height',
-        ]),
-      );
+      }).toEqual(pick(payload.recipients[0].fields[0], ['type', 'page', 'positionX', 'positionY', 'width', 'height']));
 
       // Expect string based ID to work.
       expect(field.envelopeItemId).toBe(
@@ -358,13 +343,9 @@ test.describe('API V2 Envelopes', () => {
    */
   test('Envelope full test', async ({ request }) => {
     // Step 1: Create initial envelope with Prisma (with first envelope item)
-    const alignmentPdf = fs.readFileSync(
-      path.join(__dirname, '../../../../../assets/field-font-alignment.pdf'),
-    );
+    const alignmentPdf = fs.readFileSync(path.join(__dirname, '../../../../../assets/field-font-alignment.pdf'));
 
-    const fieldMetaPdf = fs.readFileSync(
-      path.join(__dirname, '../../../../../assets/field-meta.pdf'),
-    );
+    const fieldMetaPdf = fs.readFileSync(path.join(__dirname, '../../../../../assets/field-meta.pdf'));
 
     const formData = new FormData();
 
@@ -377,10 +358,7 @@ test.describe('API V2 Envelopes', () => {
     );
 
     // Only add one file for now.
-    formData.append(
-      'files',
-      new File([alignmentPdf], 'field-font-alignment.pdf', { type: 'application/pdf' }),
-    );
+    formData.append('files', new File([alignmentPdf], 'field-font-alignment.pdf', { type: 'application/pdf' }));
 
     const createEnvelopeRequest = await request.post(`${baseUrl}/envelope/create`, {
       headers: { Authorization: `Bearer ${tokenA}` },
@@ -413,10 +391,7 @@ test.describe('API V2 Envelopes', () => {
 
     const createEnvelopeItemFormData = new FormData();
     createEnvelopeItemFormData.append('payload', JSON.stringify(createEnvelopeItemsPayload));
-    createEnvelopeItemFormData.append(
-      'files',
-      new File([fieldMetaPdf], 'field-meta.pdf', { type: 'application/pdf' }),
-    );
+    createEnvelopeItemFormData.append('files', new File([fieldMetaPdf], 'field-meta.pdf', { type: 'application/pdf' }));
 
     const createItemsRes = await request.post(`${baseUrl}/envelope/item/create-many`, {
       headers: { Authorization: `Bearer ${tokenA}` },
@@ -476,12 +451,8 @@ test.describe('API V2 Envelopes', () => {
     const envelopeResponse = (await getRes.json()) as TGetEnvelopeResponse;
 
     const recipientId = envelopeResponse.recipients[0].id;
-    const alignmentItem = envelopeResponse.envelopeItems.find(
-      (item: { order: number }) => item.order === 1,
-    );
-    const fieldMetaItem = envelopeResponse.envelopeItems.find(
-      (item: { order: number }) => item.order === 2,
-    );
+    const alignmentItem = envelopeResponse.envelopeItems.find((item: { order: number }) => item.order === 1);
+    const fieldMetaItem = envelopeResponse.envelopeItems.find((item: { order: number }) => item.order === 2);
 
     expect(recipientId).toBeDefined();
     expect(alignmentItem).toBeDefined();
@@ -550,15 +521,201 @@ test.describe('API V2 Envelopes', () => {
     // Verify structure
     expect(finalEnvelope.envelopeItems.length).toBe(2);
     expect(finalEnvelope.recipients.length).toBe(1);
-    expect(finalEnvelope.fields.length).toBe(
-      ALIGNMENT_TEST_FIELDS.length + FIELD_META_TEST_FIELDS.length,
-    );
+    expect(finalEnvelope.fields.length).toBe(ALIGNMENT_TEST_FIELDS.length + FIELD_META_TEST_FIELDS.length);
     expect(finalEnvelope.title).toBe('Envelope Full Field Test');
     expect(finalEnvelope.type).toBe(EnvelopeType.DOCUMENT);
 
     console.log({
       createdEnvelopeId: finalEnvelope.id,
       userEmail: userA.email,
+    });
+  });
+
+  test.describe('Envelope find endpoint', () => {
+    const createEnvelope = async (request: APIRequestContext, token: string, payload: TCreateEnvelopePayload) => {
+      const formData = new FormData();
+      formData.append('payload', JSON.stringify(payload));
+
+      const pdfData = fs.readFileSync(path.join(__dirname, '../../../../../assets/field-font-alignment.pdf'));
+      formData.append('files', new File([pdfData], 'test.pdf', { type: 'application/pdf' }));
+
+      const res = await request.post(`${baseUrl}/envelope/create`, {
+        headers: { Authorization: `Bearer ${token}` },
+        multipart: formData,
+      });
+
+      expect(res.ok()).toBeTruthy();
+      return (await res.json()) as TCreateEnvelopeResponse;
+    };
+
+    test('should find envelopes with pagination', async ({ request }) => {
+      // Create 3 envelopes
+      await createEnvelope(request, tokenA, {
+        type: EnvelopeType.DOCUMENT,
+        title: 'Document 1',
+      });
+      await createEnvelope(request, tokenA, {
+        type: EnvelopeType.DOCUMENT,
+        title: 'Document 2',
+      });
+      await createEnvelope(request, tokenA, {
+        type: EnvelopeType.TEMPLATE,
+        title: 'Template 1',
+      });
+
+      // Find all envelopes
+      const res = await request.get(`${baseUrl}/envelope`, {
+        headers: { Authorization: `Bearer ${tokenA}` },
+      });
+
+      expect(res.ok()).toBeTruthy();
+      expect(res.status()).toBe(200);
+
+      const response = (await res.json()) as TFindEnvelopesResponse;
+
+      expect(response.data.length).toBe(3);
+      expect(response.count).toBe(3);
+      expect(response.currentPage).toBe(1);
+      expect(response.totalPages).toBe(1);
+
+      // Test pagination
+      const paginatedRes = await request.get(`${baseUrl}/envelope?perPage=2&page=1`, {
+        headers: { Authorization: `Bearer ${tokenA}` },
+      });
+
+      expect(paginatedRes.ok()).toBeTruthy();
+      const paginatedResponse = (await paginatedRes.json()) as TFindEnvelopesResponse;
+
+      expect(paginatedResponse.data.length).toBe(2);
+      expect(paginatedResponse.count).toBe(3);
+      expect(paginatedResponse.totalPages).toBe(2);
+    });
+
+    test('should filter envelopes by type', async ({ request }) => {
+      await createEnvelope(request, tokenA, {
+        type: EnvelopeType.DOCUMENT,
+        title: 'Document Only',
+      });
+      await createEnvelope(request, tokenA, {
+        type: EnvelopeType.TEMPLATE,
+        title: 'Template Only',
+      });
+
+      // Filter by DOCUMENT type
+      const documentRes = await request.get(`${baseUrl}/envelope?type=DOCUMENT`, {
+        headers: { Authorization: `Bearer ${tokenA}` },
+      });
+
+      expect(documentRes.ok()).toBeTruthy();
+      const documentResponse = (await documentRes.json()) as TFindEnvelopesResponse;
+
+      expect(documentResponse.data.every((e) => e.type === EnvelopeType.DOCUMENT)).toBe(true);
+
+      // Filter by TEMPLATE type
+      const templateRes = await request.get(`${baseUrl}/envelope?type=TEMPLATE`, {
+        headers: { Authorization: `Bearer ${tokenA}` },
+      });
+
+      expect(templateRes.ok()).toBeTruthy();
+      const templateResponse = (await templateRes.json()) as TFindEnvelopesResponse;
+
+      expect(templateResponse.data.every((e) => e.type === EnvelopeType.TEMPLATE)).toBe(true);
+    });
+
+    test('should filter envelopes by status', async ({ request }) => {
+      await createEnvelope(request, tokenA, {
+        type: EnvelopeType.DOCUMENT,
+        title: 'Draft Document',
+      });
+
+      // Filter by DRAFT status (default for new envelopes)
+      const res = await request.get(`${baseUrl}/envelope?status=DRAFT`, {
+        headers: { Authorization: `Bearer ${tokenA}` },
+      });
+
+      expect(res.ok()).toBeTruthy();
+      const response = (await res.json()) as TFindEnvelopesResponse;
+
+      expect(response.data.every((e) => e.status === DocumentStatus.DRAFT)).toBe(true);
+    });
+
+    test('should search envelopes by query', async ({ request }) => {
+      await createEnvelope(request, tokenA, {
+        type: EnvelopeType.DOCUMENT,
+        title: 'Unique Searchable Title',
+      });
+      await createEnvelope(request, tokenA, {
+        type: EnvelopeType.DOCUMENT,
+        title: 'Another Document',
+      });
+
+      const res = await request.get(`${baseUrl}/envelope?query=Unique%20Searchable`, {
+        headers: { Authorization: `Bearer ${tokenA}` },
+      });
+
+      expect(res.ok()).toBeTruthy();
+      const response = (await res.json()) as TFindEnvelopesResponse;
+
+      expect(response.data.length).toBe(1);
+      expect(response.data[0].title).toBe('Unique Searchable Title');
+    });
+
+    test('should not return envelopes from other users', async ({ request }) => {
+      // Create envelope for userA
+      await createEnvelope(request, tokenA, {
+        type: EnvelopeType.DOCUMENT,
+        title: 'UserA Document',
+      });
+
+      // Create envelope for userB
+      await createEnvelope(request, tokenB, {
+        type: EnvelopeType.DOCUMENT,
+        title: 'UserB Document',
+      });
+
+      // userA should only see their own envelopes
+      const resA = await request.get(`${baseUrl}/envelope`, {
+        headers: { Authorization: `Bearer ${tokenA}` },
+      });
+
+      expect(resA.ok()).toBeTruthy();
+      const responseA = (await resA.json()) as TFindEnvelopesResponse;
+
+      expect(responseA.data.every((e) => e.title !== 'UserB Document')).toBe(true);
+
+      // userB should only see their own envelopes
+      const resB = await request.get(`${baseUrl}/envelope`, {
+        headers: { Authorization: `Bearer ${tokenB}` },
+      });
+
+      expect(resB.ok()).toBeTruthy();
+      const responseB = (await resB.json()) as TFindEnvelopesResponse;
+
+      expect(responseB.data.every((e) => e.title !== 'UserA Document')).toBe(true);
+    });
+
+    test('should return envelope with expected schema fields', async ({ request }) => {
+      await createEnvelope(request, tokenA, {
+        type: EnvelopeType.DOCUMENT,
+        title: 'Schema Test Document',
+      });
+
+      const res = await request.get(`${baseUrl}/envelope`, {
+        headers: { Authorization: `Bearer ${tokenA}` },
+      });
+
+      expect(res.ok()).toBeTruthy();
+      const response = (await res.json()) as TFindEnvelopesResponse;
+
+      const envelope = response.data.find((e) => e.title === 'Schema Test Document');
+
+      expect(envelope).toBeDefined();
+      expect(envelope?.id).toBeDefined();
+      expect(envelope?.type).toBe(EnvelopeType.DOCUMENT);
+      expect(envelope?.status).toBe(DocumentStatus.DRAFT);
+      expect(envelope?.recipients).toBeDefined();
+      expect(envelope?.user).toBeDefined();
+      expect(envelope?.team).toBeDefined();
     });
   });
 
@@ -1000,9 +1157,7 @@ test.describe('API V2 Envelopes', () => {
       expect(distributeResponse.recipients[1].signingUrl).toBeTruthy();
     });
 
-    test('Distribute envelope with empty email recipient and auth requirements fails', async ({
-      request,
-    }) => {
+    test('Distribute envelope with empty email recipient and auth requirements fails', async ({ request }) => {
       const payload = {
         type: EnvelopeType.DOCUMENT,
         title: 'Document with Auth Requirements',
